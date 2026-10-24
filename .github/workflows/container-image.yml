@@ -156,11 +156,18 @@ jobs:
           REF: ${{ steps.push.outputs.ref }}
         run: |
           cosign sign --yes "$REF"
-          cosign attest --yes --predicate sbom.spdx.json --type spdx "$REF"
+          # spdxjson: el SBOM de Syft es SPDX JSON (`spdx` es el formato tag-value
+          # y guardaría el documento como texto).
+          cosign attest --yes --predicate sbom.spdx.json --type spdxjson "$REF"
           # La identidad del certificado es este workflow reutilizable; el repo
           # que construyó la imagen va en su propio claim.
           cosign verify "$REF" \
             --certificate-identity-regexp '^https://github.com/miguelortiz13/ci-workflows/\.github/workflows/container-image\.yml@' \
             --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com > /dev/null
-          echo "Firmada y verificada (Cosign keyless)." >> "$GITHUB_STEP_SUMMARY"
+          packages=$(cosign verify-attestation "$REF" --type spdxjson \
+            --certificate-identity-regexp '^https://github.com/miguelortiz13/ci-workflows/\.github/workflows/container-image\.yml@' \
+            --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com 2>/dev/null \
+            | head -n1 | jq -r '.payload' | base64 -d | jq -e '.predicate.packages | length')
+          echo "Firmada y verificada (Cosign keyless); SBOM atestado con $packages paquetes." >> "$GITHUB_STEP_SUMMARY"
