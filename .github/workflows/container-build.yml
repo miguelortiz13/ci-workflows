@@ -7,7 +7,7 @@ name: Container build (reutilizable)
 #
 #   jobs:
 #     image:
-#       uses: miguelortiz13/github-workflows/.github/workflows/container-build.yml@v0.2.0
+#       uses: miguelortiz13/github-workflows/.github/workflows/container-build.yml@v0.3.0
 #       permissions: { contents: read, packages: write }
 #       with:
 #         image-name: nexpos-backend
@@ -44,10 +44,10 @@ on:
         description: Publica en GHCR. Déjalo en false para PRs.
         type: boolean
         default: false
-      fail-on-critical:
-        description: Falla si Trivy encuentra vulnerabilidades CRITICAL con arreglo disponible.
-        type: boolean
-        default: false
+      fail-severity:
+        description: Severidades que hacen fallar el build si tienen arreglo disponible (p. ej. CRITICAL o HIGH,CRITICAL). Vacío = solo informa.
+        type: string
+        default: ""
     outputs:
       image:
         description: Nombre completo de la imagen (ghcr.io/<dueño>/<nombre>).
@@ -106,13 +106,13 @@ jobs:
           ignore-unfixed: true
           exit-code: "0"
 
-      - name: Trivy (umbral CRITICAL)
-        if: inputs.fail-on-critical
+      - name: Trivy (umbral)
+        if: inputs.fail-severity != ''
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ steps.meta.outputs.image }}:${{ github.sha }}
           format: table
-          severity: CRITICAL
+          severity: ${{ inputs.fail-severity }}
           ignore-unfixed: true
           exit-code: "1"
 
