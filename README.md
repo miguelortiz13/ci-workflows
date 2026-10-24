@@ -136,6 +136,8 @@ Los deja listos `platform-governance/scripts/configurar-github.sh`:
 - Para `security-baseline.yml`: **Dependency graph** activo en el repo. Se activa
   junto con las alertas de Dependabot: `gh api -X PUT repos/<dueño>/<repo>/vulnerability-alerts`.
   Sin él, el job `dependency-review` falla con *Dependency review is not supported*.
+  Si no puedes activarlo (no eres admin del repo), llama al workflow con
+  `dependency-review: false`: Gitleaks sigue corriendo.
 
 ## Verificar una imagen firmada
 
