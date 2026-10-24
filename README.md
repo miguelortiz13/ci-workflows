@@ -115,9 +115,23 @@ quedan como jobs del proyecto, intercalados con `needs`.
 Los deja listos `platform-governance/scripts/configurar-github.sh`:
 
 - `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` y `AZURE_SUBSCRIPTION_ID` (identidad de
-  despliegue del proyecto, OIDC) como **variables** o como **secretos**, del repo
-  o del environment. En repos públicos conviene usar secretos: las variables
-  aparecen en los logs. Los workflows de despliegue además ocultan las URLs.
+  despliegue del proyecto, OIDC) como **variables de repo** o como **secretos de
+  repo** que el proyecto pasa explícitamente. En repos públicos conviene usar
+  secretos: las variables aparecen en los logs. Los workflows de despliegue además
+  ocultan las URLs.
+
+  ```yaml
+  deploy:
+    uses: miguelortiz13/github-workflows/.github/workflows/deploy-azure-container-app.yml@v0.3.1
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ```
+
+  > Los **secretos y variables del environment** (p. ej. `dev`) no sirven aquí:
+  > el job que llama a un workflow reutilizable no puede declarar environment,
+  > así que no los ve y no puede pasarlos.
 - Environment `prod` con aprobación y su credencial federada.
 - Para `security-baseline.yml`: **Dependency graph** activo en el repo. Se activa
   junto con las alertas de Dependabot: `gh api -X PUT repos/<dueño>/<repo>/vulnerability-alerts`.
@@ -139,7 +153,9 @@ cosign verify ghcr.io/<dueño>/<imagen>@sha256:<digest> \
 - Los inputs solo son `string`, `number` o `boolean`; las listas van como texto
   (una por línea o separadas por espacios).
 - Los secretos se pasan explícitamente (`secrets:`) o con `secrets: inherit`.
-- `vars` y los environments son los del repo que llama.
+- `vars` y los environments son los del repo que llama, pero el job que llama no
+  ve los secretos ni las variables de un environment: lo que haya que pasar como
+  input o secreto debe estar a nivel de repo.
 
 ## Calidad
 
