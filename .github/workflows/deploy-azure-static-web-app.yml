@@ -99,7 +99,7 @@ jobs:
 
       # Identificadores como variables de repo o como secretos de repo pasados en
       # `secrets:`. Los secretos del environment NO llegan a un workflow reutilizable.
-      - uses: azure/login@v2
+      - uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID || secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID || secrets.AZURE_TENANT_ID }}
