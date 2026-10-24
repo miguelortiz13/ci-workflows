@@ -1,0 +1,1 @@
+# Sin dependencias: el proyecto de prueba solo usa la biblioteca estándar.

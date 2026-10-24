@@ -1,0 +1,75 @@
+name: Build Python (reutilizable)
+
+# Instala dependencias con caché de pip y ejecuta lint y pruebas. Uso:
+#
+#   jobs:
+#     build:
+#       uses: miguelortiz13/github-workflows/.github/workflows/build-python.yml@v0.3.0
+#       with:
+#         working-directory: backend
+#         requirements: requirements.txt requirements-dev.txt
+#         commands: |
+#           ruff check app tests
+#           python -m pytest
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        type: string
+        default: "3.13"
+      working-directory:
+        description: Carpeta del proyecto.
+        type: string
+        default: "."
+      requirements:
+        description: Archivos de dependencias, separados por espacios (relativos a working-directory).
+        type: string
+        default: requirements.txt
+      commands:
+        description: Comandos de lint y pruebas, uno por línea; se detiene en el primero que falle.
+        type: string
+        default: python -m pytest
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Archivos de dependencias para la caché
+        id: deps
+        env:
+          DIR: ${{ inputs.working-directory }}
+          FILES: ${{ inputs.requirements }}
+        run: |
+          {
+            echo "paths<<EOF"
+            for f in $FILES; do echo "$DIR/$f"; done
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+          cache: pip
+          cache-dependency-path: ${{ steps.deps.outputs.paths }}
+
+      - name: Dependencias
+        env:
+          FILES: ${{ inputs.requirements }}
+        run: |
+          args=()
+          for f in $FILES; do args+=(-r "$f"); done
+          pip install "${args[@]}"
+
+      - name: Lint y pruebas
+        env:
+          COMMANDS: ${{ inputs.commands }}
+        run: bash -e -c "$COMMANDS"
