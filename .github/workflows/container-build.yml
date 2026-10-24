@@ -1,21 +1,21 @@
-name: Container image (reutilizable)
+name: Container build (reutilizable)
 
-# Construye una imagen, la escanea con Trivy y, si `push` es true, la publica en
-# GHCR con las etiquetas <sha> y latest, la firma con Cosign (keyless) y le
-# adjunta el SBOM como atestación. Uso:
+# Construye la imagen, la escanea con Trivy y, si `push` es true, la publica en
+# GHCR con las etiquetas <sha> y latest. El escaneo va ANTES del push a
+# propósito: una imagen que no pasa el umbral nunca llega al registro.
+# La firma y el SBOM van aparte, en container-sign.yml. Uso:
 #
 #   jobs:
 #     image:
-#       uses: miguelortiz13/ci-workflows/.github/workflows/container-image.yml@v0.1.0
-#       permissions: { contents: read, packages: write, id-token: write }
+#       uses: miguelortiz13/github-workflows/.github/workflows/container-build.yml@v0.2.0
+#       permissions: { contents: read, packages: write }
 #       with:
 #         image-name: nexpos-backend
 #         dockerfile: monolith-app/Dockerfile
 #         push: ${{ github.event_name == 'push' }}
 #
 # Salidas: `image` (ghcr.io/<dueño>/<nombre>), `tag` (<sha>) y `ref`
-# (imagen@sha256:..., vacío si no se publica). Despliega siempre `ref` o el tag
-# <sha>, nunca `latest`.
+# (imagen@sha256:..., vacío si no se publica). Despliega `tag` o `ref`, nunca latest.
 
 on:
   workflow_call:
@@ -41,7 +41,7 @@ on:
         type: string
         default: ""
       push:
-        description: Publica, firma y atesta. Déjalo en false para PRs.
+        description: Publica en GHCR. Déjalo en false para PRs.
         type: boolean
         default: false
       fail-on-critical:
@@ -51,24 +51,23 @@ on:
     outputs:
       image:
         description: Nombre completo de la imagen (ghcr.io/<dueño>/<nombre>).
-        value: ${{ jobs.image.outputs.image }}
+        value: ${{ jobs.build.outputs.image }}
       tag:
         description: Etiqueta inmutable publicada (<sha>).
-        value: ${{ jobs.image.outputs.tag }}
+        value: ${{ jobs.build.outputs.tag }}
       ref:
         description: Referencia por digest (imagen@sha256:...). Vacía si no se publicó.
-        value: ${{ jobs.image.outputs.ref }}
+        value: ${{ jobs.build.outputs.ref }}
 
 permissions:
   contents: read
 
 jobs:
-  image:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-      id-token: write
     outputs:
       image: ${{ steps.meta.outputs.image }}
       tag: ${{ github.sha }}
@@ -137,40 +136,3 @@ jobs:
           [ -n "$digest" ] || { echo "::error::No se obtuvo el digest de $IMAGE"; exit 1; }
           echo "ref=$digest" >> "$GITHUB_OUTPUT"
           echo "Publicada: $digest" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: SBOM (SPDX)
-        if: inputs.push
-        uses: anchore/sbom-action@v0.24.2
-        with:
-          image: ${{ steps.push.outputs.ref }}
-          format: spdx-json
-          output-file: sbom.spdx.json
-          upload-artifact: false
-
-      - uses: sigstore/cosign-installer@v3.8.2
-        if: inputs.push
-
-      - name: Firma keyless y atestación del SBOM
-        if: inputs.push
-        env:
-          REF: ${{ steps.push.outputs.ref }}
-        run: |
-          cosign sign --yes "$REF"
-          # spdxjson: el SBOM de Syft es SPDX JSON (`spdx` es el formato tag-value
-          # y guardaría el documento como texto).
-          cosign attest --yes --predicate sbom.spdx.json --type spdxjson "$REF"
-          # La identidad del certificado es este workflow reutilizable; el repo
-          # que construyó la imagen va en su propio claim.
-          cosign verify "$REF" \
-            --certificate-identity-regexp '^https://github.com/miguelortiz13/ci-workflows/\.github/workflows/container-image\.yml@' \
-            --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
-            --certificate-oidc-issuer https://token.actions.githubusercontent.com > /dev/null
-          # Si el build no cambió, el digest se repite y acumula atestaciones de
-          # ejecuciones anteriores: basta con que una sea un SBOM válido.
-          packages=$(cosign verify-attestation "$REF" --type spdxjson \
-            --certificate-identity-regexp '^https://github.com/miguelortiz13/ci-workflows/\.github/workflows/container-image\.yml@' \
-            --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
-            --certificate-oidc-issuer https://token.actions.githubusercontent.com 2>/dev/null \
-            | jq -r '.payload' | while read -r p; do base64 -d <<<"$p"; echo; done \
-            | jq -se '[.[] | select(.predicate | type == "object") | .predicate.packages | length] | max // empty | select(. > 0)')
-          echo "Firmada y verificada (Cosign keyless); SBOM atestado con $packages paquetes." >> "$GITHUB_STEP_SUMMARY"

@@ -1,4 +1,4 @@
-name: Deploy Container App (reutilizable)
+name: Deploy Azure Container App (reutilizable)
 
 # Despliega una imagen en una Azure Container App con OIDC (sin secretos) y
 # espera a que responda sana. Uso:
@@ -6,7 +6,7 @@ name: Deploy Container App (reutilizable)
 #   jobs:
 #     deploy:
 #       needs: image
-#       uses: miguelortiz13/ci-workflows/.github/workflows/deploy-container-app.yml@v0.1.0
+#       uses: miguelortiz13/github-workflows/.github/workflows/deploy-azure-container-app.yml@v0.2.0
 #       permissions: { contents: read, id-token: write }
 #       with:
 #         app-name: ${{ vars.NEXPOS_API_APP }}
