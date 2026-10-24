@@ -165,9 +165,12 @@ jobs:
             --certificate-identity-regexp '^https://github.com/miguelortiz13/ci-workflows/\.github/workflows/container-image\.yml@' \
             --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com > /dev/null
+          # Si el build no cambió, el digest se repite y acumula atestaciones de
+          # ejecuciones anteriores: basta con que una sea un SBOM válido.
           packages=$(cosign verify-attestation "$REF" --type spdxjson \
             --certificate-identity-regexp '^https://github.com/miguelortiz13/ci-workflows/\.github/workflows/container-image\.yml@' \
             --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com 2>/dev/null \
-            | head -n1 | jq -r '.payload' | base64 -d | jq -e '.predicate.packages | length')
+            | jq -r '.payload' | while read -r p; do base64 -d <<<"$p"; echo; done \
+            | jq -se '[.[] | select(.predicate | type == "object") | .predicate.packages | length] | max // empty | select(. > 0)')
           echo "Firmada y verificada (Cosign keyless); SBOM atestado con $packages paquetes." >> "$GITHUB_STEP_SUMMARY"
