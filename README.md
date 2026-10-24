@@ -62,6 +62,9 @@ Los deja listos `platform-governance/scripts/configurar-github.sh`:
 - Variables de repo `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` y `AZURE_SUBSCRIPTION_ID`
   (identidad de despliegue del proyecto, OIDC).
 - Environment `prod` con aprobación y su credencial federada.
+- Para `security-baseline.yml`: **Dependency graph** activo en el repo. Se activa
+  junto con las alertas de Dependabot: `gh api -X PUT repos/<dueño>/<repo>/vulnerability-alerts`.
+  Sin él, el job `dependency-review` falla con *Dependency review is not supported*.
 
 ## Estándares
 
