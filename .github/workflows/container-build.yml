@@ -80,7 +80,7 @@ jobs:
         # GHCR exige minúsculas y el dueño del repo puede tener mayúsculas.
         run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ inputs.image-name }}" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build
         uses: docker/build-push-action@v6
