@@ -1,0 +1,166 @@
+name: Container image (reutilizable)
+
+# Construye una imagen, la escanea con Trivy y, si `push` es true, la publica en
+# GHCR con las etiquetas <sha> y latest, la firma con Cosign (keyless) y le
+# adjunta el SBOM como atestación. Uso:
+#
+#   jobs:
+#     image:
+#       uses: miguelortiz13/ci-workflows/.github/workflows/container-image.yml@v0.1.0
+#       permissions: { contents: read, packages: write, id-token: write }
+#       with:
+#         image-name: nexpos-backend
+#         dockerfile: monolith-app/Dockerfile
+#         push: ${{ github.event_name == 'push' }}
+#
+# Salidas: `image` (ghcr.io/<dueño>/<nombre>), `tag` (<sha>) y `ref`
+# (imagen@sha256:..., vacío si no se publica). Despliega siempre `ref` o el tag
+# <sha>, nunca `latest`.
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        description: Nombre de la imagen en GHCR, sin dueño (p. ej. nexpos-backend).
+        type: string
+        required: true
+      context:
+        description: Contexto de build.
+        type: string
+        default: "."
+      dockerfile:
+        description: Dockerfile (relativo a la raíz del repo). Vacío = <context>/Dockerfile.
+        type: string
+        default: ""
+      target:
+        description: Etapa del Dockerfile multi-stage (opcional).
+        type: string
+        default: ""
+      build-args:
+        description: Build args, uno por línea (KEY=VALUE).
+        type: string
+        default: ""
+      push:
+        description: Publica, firma y atesta. Déjalo en false para PRs.
+        type: boolean
+        default: false
+      fail-on-critical:
+        description: Falla si Trivy encuentra vulnerabilidades CRITICAL con arreglo disponible.
+        type: boolean
+        default: false
+    outputs:
+      image:
+        description: Nombre completo de la imagen (ghcr.io/<dueño>/<nombre>).
+        value: ${{ jobs.image.outputs.image }}
+      tag:
+        description: Etiqueta inmutable publicada (<sha>).
+        value: ${{ jobs.image.outputs.tag }}
+      ref:
+        description: Referencia por digest (imagen@sha256:...). Vacía si no se publicó.
+        value: ${{ jobs.image.outputs.ref }}
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+      tag: ${{ github.sha }}
+      ref: ${{ steps.push.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Nombre de la imagen
+        id: meta
+        # GHCR exige minúsculas y el dueño del repo puede tener mayúsculas.
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${{ inputs.image-name }}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          target: ${{ inputs.target }}
+          build-args: ${{ inputs.build-args }}
+          load: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ github.sha }}
+            ${{ steps.meta.outputs.image }}:latest
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=${{ inputs.image-name }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.image-name }}
+
+      - name: Trivy (CRITICAL y HIGH)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.meta.outputs.image }}:${{ github.sha }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "0"
+
+      - name: Trivy (umbral CRITICAL)
+        if: inputs.fail-on-critical
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.meta.outputs.image }}:${{ github.sha }}
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Login en GHCR
+        if: inputs.push
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push
+        id: push
+        if: inputs.push
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+        run: |
+          docker push "$IMAGE:${GITHUB_SHA}"
+          docker push "$IMAGE:latest"
+          digest=$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' "$IMAGE:${GITHUB_SHA}" | grep "^$IMAGE@" | head -n1)
+          [ -n "$digest" ] || { echo "::error::No se obtuvo el digest de $IMAGE"; exit 1; }
+          echo "ref=$digest" >> "$GITHUB_OUTPUT"
+          echo "Publicada: $digest" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: SBOM (SPDX)
+        if: inputs.push
+        uses: anchore/sbom-action@v0.24.2
+        with:
+          image: ${{ steps.push.outputs.ref }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+
+      - uses: sigstore/cosign-installer@v3.8.2
+        if: inputs.push
+
+      - name: Firma keyless y atestación del SBOM
+        if: inputs.push
+        env:
+          REF: ${{ steps.push.outputs.ref }}
+        run: |
+          cosign sign --yes "$REF"
+          cosign attest --yes --predicate sbom.spdx.json --type spdx "$REF"
+          # La identidad del certificado es este workflow reutilizable; el repo
+          # que construyó la imagen va en su propio claim.
+          cosign verify "$REF" \
+            --certificate-identity-regexp '^https://github.com/miguelortiz13/ci-workflows/\.github/workflows/container-image\.yml@' \
+            --certificate-github-workflow-repository "$GITHUB_REPOSITORY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com > /dev/null
+          echo "Firmada y verificada (Cosign keyless)." >> "$GITHUB_STEP_SUMMARY"

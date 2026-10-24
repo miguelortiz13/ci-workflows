@@ -1,0 +1,131 @@
+name: Deploy Static Web App (reutilizable)
+
+# Compila un frontend Node y lo publica en Azure Static Web Apps. Entra con OIDC
+# y pide el token de despliegue en el momento: no hay secretos guardados. Uso:
+#
+#   jobs:
+#     web:
+#       uses: miguelortiz13/ci-workflows/.github/workflows/deploy-static-web-app.yml@v0.1.0
+#       permissions: { contents: read, id-token: write }
+#       with:
+#         app-name: ${{ vars.NEXPOS_SWA_NAME }}
+#         resource-group: ${{ vars.NEXPOS_RESOURCE_GROUP }}
+#         build-env: |
+#           VITE_API_URL=${{ vars.NEXPOS_API_URL }}
+#         verify-paths: / /login
+#
+# Variables de build sensibles: pásalas en el secreto `build-secrets` con el
+# mismo formato (KEY=VALUE por línea).
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        default: prod
+      app-name:
+        type: string
+        required: true
+      resource-group:
+        type: string
+        required: true
+      working-directory:
+        description: Carpeta del frontend.
+        type: string
+        default: "."
+      node-version:
+        type: string
+        default: "22"
+      build-command:
+        type: string
+        default: npm ci && npm run build
+      output-dir:
+        description: Carpeta compilada, relativa a working-directory.
+        type: string
+        default: dist
+      build-env:
+        description: Variables de build no sensibles, KEY=VALUE por línea.
+        type: string
+        default: ""
+      verify-paths:
+        description: Rutas que deben responder 200 tras publicar (separadas por espacios).
+        type: string
+        default: /
+    secrets:
+      build-secrets:
+        description: Variables de build sensibles, KEY=VALUE por línea.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - name: Build
+        env:
+          BUILD_ENV: ${{ inputs.build-env }}
+          BUILD_SECRETS: ${{ secrets.build-secrets }}
+          BUILD_COMMAND: ${{ inputs.build-command }}
+        run: |
+          # Exporta cada KEY=VALUE solo para este paso (no pasa por GITHUB_ENV).
+          while IFS= read -r line; do
+            [ -n "$line" ] && export "${line?}"
+          done < <(printf '%s\n%s\n' "$BUILD_ENV" "$BUILD_SECRETS")
+          unset BUILD_ENV BUILD_SECRETS
+          bash -c "$BUILD_COMMAND"
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Token de despliegue
+        id: swa
+        env:
+          APP: ${{ inputs.app-name }}
+          RG: ${{ inputs.resource-group }}
+        run: |
+          token=$(az staticwebapp secrets list --name "$APP" --resource-group "$RG" --query properties.apiKey -o tsv)
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Publicar
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ steps.swa.outputs.token }}
+          action: upload
+          app_location: ${{ inputs.working-directory }}/${{ inputs.output-dir }}
+          skip_app_build: true
+          skip_api_build: true
+
+      - name: Verificar rutas
+        env:
+          APP: ${{ inputs.app-name }}
+          RG: ${{ inputs.resource-group }}
+          PATHS: ${{ inputs.verify-paths }}
+        run: |
+          host=$(az staticwebapp show -n "$APP" -g "$RG" --query defaultHostname -o tsv)
+          for path in $PATHS; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://$host$path")
+            echo "$path -> $code"
+            [ "$code" = "200" ] || { echo "::error::$path devolvió $code"; exit 1; }
+          done
+          echo "Publicado en https://$host" >> "$GITHUB_STEP_SUMMARY"
