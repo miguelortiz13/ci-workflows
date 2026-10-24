@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/miguelortiz13/github-workflows/compare/v0.3.0...v0.3.1) (2026-10-24)
+
+
+### Bug Fixes
+
+* **deploy:** documentar que los identificadores de Azure van a nivel de repo ([#15](https://github.com/miguelortiz13/github-workflows/issues/15)) ([a4dea7a](https://github.com/miguelortiz13/github-workflows/commit/a4dea7a57bb67b91c902813e946dcd03bef05051))
+
 ## [0.3.0](https://github.com/miguelortiz13/github-workflows/compare/v0.2.0...v0.3.0) (2026-10-24)
 
 
