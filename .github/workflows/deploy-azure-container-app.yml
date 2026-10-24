@@ -71,8 +71,8 @@ jobs:
       contents: read
       id-token: write
     steps:
-      # Los identificadores pueden ser variables o secretos (del repo o del
-      # environment): en repos públicos, como secretos no aparecen en los logs.
+      # Identificadores como variables de repo o como secretos de repo pasados en
+      # `secrets:`. Los secretos del environment NO llegan a un workflow reutilizable.
       - uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID || secrets.AZURE_CLIENT_ID }}
