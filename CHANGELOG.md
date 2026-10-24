@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/miguelortiz13/github-workflows/compare/v0.3.1...v0.4.0) (2026-10-24)
+
+
+### Features
+
+* **security-baseline:** dependency review opcional ([#17](https://github.com/miguelortiz13/github-workflows/issues/17)) ([328cf13](https://github.com/miguelortiz13/github-workflows/commit/328cf13c1cafdc6464eeff73489de2cb8676909f))
+
 ## [0.3.1](https://github.com/miguelortiz13/github-workflows/compare/v0.3.0...v0.3.1) (2026-10-24)
 
 
