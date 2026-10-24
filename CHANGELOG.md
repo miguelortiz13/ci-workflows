@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.0](https://github.com/miguelortiz13/github-workflows/compare/v0.2.0...v0.3.0) (2026-10-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* container-build reemplaza fail-on-critical por fail-severity.
+
+### Features
+
+* build-python, umbral de Trivy configurable, jobs en Container Apps y credenciales como secretos ([#13](https://github.com/miguelortiz13/github-workflows/issues/13)) ([4c00497](https://github.com/miguelortiz13/github-workflows/commit/4c00497a84a480d8eb6d297027df0e04e88255b5))
+
 ## [0.2.0](https://github.com/miguelortiz13/github-workflows/compare/v0.1.2...v0.2.0) (2026-10-24)
 
 
