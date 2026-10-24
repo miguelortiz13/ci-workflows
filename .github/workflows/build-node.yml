@@ -1,0 +1,74 @@
+name: Build Node (reutilizable)
+
+# Instala dependencias con caché, ejecuta lint, pruebas y build (los scripts que
+# existan en package.json) y, opcionalmente, sube lo compilado. Uso:
+#
+#   jobs:
+#     build:
+#       uses: miguelortiz13/github-workflows/.github/workflows/build-node.yml@v0.2.0
+#       with:
+#         node-version: "22"
+#         artifact-path: dist
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: "22"
+      working-directory:
+        description: Carpeta del package.json.
+        type: string
+        default: "."
+      install-command:
+        type: string
+        default: npm ci
+      scripts:
+        description: Scripts de package.json a ejecutar en orden (los que no existan se omiten).
+        type: string
+        default: lint test build
+      artifact-path:
+        description: Carpeta compilada a subir como artefacto (relativa a working-directory). Vacío = no se sube.
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - name: Dependencias
+        env:
+          INSTALL: ${{ inputs.install-command }}
+        run: bash -c "$INSTALL"
+
+      - name: Lint, pruebas y build
+        env:
+          SCRIPTS: ${{ inputs.scripts }}
+        run: |
+          for script in $SCRIPTS; do
+            echo "::group::npm run $script"
+            npm run "$script" --if-present
+            echo "::endgroup::"
+          done
+
+      - name: Artefacto
+        if: inputs.artifact-path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ github.sha }}
+          path: ${{ inputs.working-directory }}/${{ inputs.artifact-path }}
+          retention-days: 7

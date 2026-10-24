@@ -1,11 +1,11 @@
-name: Deploy Static Web App (reutilizable)
+name: Deploy Azure Static Web App (reutilizable)
 
 # Compila un frontend Node y lo publica en Azure Static Web Apps. Entra con OIDC
 # y pide el token de despliegue en el momento: no hay secretos guardados. Uso:
 #
 #   jobs:
 #     web:
-#       uses: miguelortiz13/ci-workflows/.github/workflows/deploy-static-web-app.yml@v0.1.0
+#       uses: miguelortiz13/github-workflows/.github/workflows/deploy-azure-static-web-app.yml@v0.2.0
 #       permissions: { contents: read, id-token: write }
 #       with:
 #         app-name: ${{ vars.NEXPOS_SWA_NAME }}

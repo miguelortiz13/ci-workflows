@@ -16,18 +16,23 @@ jobs:
       - name: actionlint (incluye shellcheck de los run)
         run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color
 
-  # Prueba real del workflow de imagen, sin publicar.
-  container-image:
-    uses: ./.github/workflows/container-image.yml
+  # Pruebas reales de los workflows reutilizables (sin publicar nada).
+  container-build:
+    uses: ./.github/workflows/container-build.yml
     permissions:
       contents: read
       packages: write
-      id-token: write
     with:
-      image-name: ci-workflows-test
+      image-name: github-workflows-test
       context: tests/container
       build-args: MENSAJE=hola
       push: false
+
+  build-node:
+    uses: ./.github/workflows/build-node.yml
+    with:
+      working-directory: tests/node
+      artifact-path: dist
 
   security:
     uses: ./.github/workflows/security-baseline.yml

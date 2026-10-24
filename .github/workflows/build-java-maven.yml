@@ -1,0 +1,66 @@
+name: Build Java / Maven (reutilizable)
+
+# Compila y prueba un proyecto Maven con caché de dependencias y sube los
+# reportes de pruebas. Uso:
+#
+#   jobs:
+#     build:
+#       uses: miguelortiz13/github-workflows/.github/workflows/build-java-maven.yml@v0.2.0
+#       with:
+#         java-version: "17"
+#
+# Pasos propios del proyecto (pruebas e2e, smoke tests) van en jobs aparte que
+# dependan de este.
+
+on:
+  workflow_call:
+    inputs:
+      java-version:
+        type: string
+        default: "21"
+      distribution:
+        type: string
+        default: temurin
+      working-directory:
+        description: Carpeta del pom.xml raíz.
+        type: string
+        default: "."
+      command:
+        description: Comando de build y pruebas.
+        type: string
+        default: mvn --batch-mode --no-transfer-progress verify
+      test-reports:
+        description: Reportes de pruebas a subir como artefacto (glob). Vacío = no se suben.
+        type: string
+        default: "**/target/surefire-reports/*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ inputs.java-version }}
+          distribution: ${{ inputs.distribution }}
+          cache: maven
+
+      - name: Build y pruebas
+        env:
+          COMMAND: ${{ inputs.command }}
+        run: bash -c "$COMMAND"
+
+      - name: Reportes de pruebas
+        if: always() && inputs.test-reports != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: ${{ inputs.working-directory }}/${{ inputs.test-reports }}
+          if-no-files-found: ignore
