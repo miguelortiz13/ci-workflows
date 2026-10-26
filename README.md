@@ -6,6 +6,8 @@ falta, infraestructura y operación. Es el equivalente en pipelines de
 [terraform-modules-iac](https://github.com/miguelortiz13/terraform-modules-iac):
 cada proyecto arma su pipeline combinando piezas pequeñas y versionadas.
 
+Complementa proyectos bajo estandarizacion de Workflows reutilizables en Github como plataforma de repositorios
+
 ## Catálogo
 
 | Categoría | Workflow | Qué hace | Permisos que pide |
